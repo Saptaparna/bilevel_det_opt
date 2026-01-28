@@ -1,59 +1,89 @@
-environment:
-  mode: key4hep  # options: key4hep (default), spack
+run_mode: generate  # local | slurm | generate
 
 key4hep:
-  setup_script: /cvmfs/sw.hsf.org/key4hep/setup.sh -r 2025-01-28
-
-spack:
-  spack_repo_root: /home/wonyongc/src/hep/bilevel_det_opt/spack
-  key4hep_repo_root: /home/wonyongc/src/hep/bilevel_det_opt/key4hep-spack
-  spack_env_dir: /home/wonyongc/src/hep/bilevel_det_opt/spack_envs/minimal_dd4hep/env
-  use_external: false
+  run_setup: true
+  setup_script: source /cvmfs/sw.hsf.org/key4hep/setup.sh -r 2025-01-28
 
 detectors:
   scepcal:
-    repo_root: /home/wonyongc/src/hep/SCEPCal
-    source_script: /home/wonyongc/src/hep/SCEPCal/install/bin/thisScepcal.sh
-    steering_template: /home/wonyongc/src/hep/SCEPCal/scripts/scepcal_steering_template.py
-    compact_xml: /home/wonyongc/src/hep/SCEPCal/compact/SCEPCal.xml
+    repo_root:      /home/wonyongc/src/hep/k4geo
+    source_script:  /home/wonyongc/src/hep/k4geo/install/bin/thisk4geo.sh
+    steering_file:  /home/wonyongc/src/hep/bilevel_det_opt/detector_config/IDEA_o2_v01/SteeringFile_IDEA_o2_v01.py
+    compact_xml:    /home/wonyongc/src/hep/bilevel_det_opt/detector_config/IDEA_o2_v01/IDEA_o2_v01.xml
+    dimensions_xml: /home/wonyongc/src/hep/bilevel_det_opt/detector_config/IDEA_o2_v01/DectDimensions_IDEA_o2_v01.xml
 
-# Runtime + job scheduler
 runtime:
   runs_dir: /home/wonyongc/src/hep/bilevel_det_opt/runs
   ddsim_executable: ddsim
   scheduler:
     slurm:
-      partition: physics
-      constraint: cascade
       cpus_per_task: 1
       mem: 12G
-      time: "60:00:00"
+      time: "1:00:00"
       mail_user: wonyongc@princeton.edu
       mail_type: all
 
-# Simulation inputs + geometry sweep.
-batch:
-  detector_label: scepcal
-  seeds:
-    start: 1
-    end: 2
-  particles: [e-,gamma,pi0]
-  events: 1000
-  momentum_GeV: 50
-  plusminus_percent: 0
-  filter: ""
-  filtercut1: 0
-  filtercut2: 0
-  theta_min: 60
-  theta_max: 120
-
-  geometry:
-    parameter: scepcal_xtal_theta_width
-    start: 1.0
-    stop: 2.0
-    step: 0.1
-    unit: cm
-
-# Global options.
-submit: false
-state_dir: .state
+runs:
+  - name: test_2x2params
+    outer_loop:
+      detector_label: scepcal
+      seeds:
+        start: 0
+        end: 0
+      geometry:
+        - parameter: scepcal_xtal_theta_width
+          start: 5.0
+          stop: 10.0
+          step: 0.5
+          unit: cm
+        - parameter: scepcal_projective_offset_r
+          start: 0.0
+          stop: 10.0
+          step: 1.0
+          unit: cm
+      sim:
+        particles: [e-] # [e-,gamma,pi0]
+        events: 10
+        momentum_GeV: 1
+        plusminus_percent: 0
+        theta_min: 60
+        theta_max: 120
+    inner_loop:
+      tree_name: events
+      branches:
+        - name: SCEPCal_MainEdep
+          hit_type: SimCalorimeterHit
+      geometry_labels:
+        scepcal_xtal_theta_width: Crystal width [cm]
+        scepcal_projective_offset_r: Projective offset [cm]
+      heatmap:
+        axes: [scepcal_xtal_theta_width, scepcal_projective_offset_r]
+        fixed: {}  # fix other params to plot heatmap e.g. {param3: 5.0}
+      algorithm:
+        name: seeded_radius_cog
+        params:
+          branch: SCEPCal_MainEdep
+        # Optimization methods:
+        #   bounded              — 1-D only, fast local search
+        #   L-BFGS-B             — quasi-Newton, fast local (gradient-based)
+        #   differential_evolution — evolutionary global optimizer, gradient-free
+        #   dual_annealing       — simulated annealing + local search
+        #   shgo                 — deterministic, finds all local minima
+        #   brute                — exhaustive grid search + local polish
+        optimize_method: differential_evolution
+        # force_grid_landscape: false  # force full grid evaluation for 3+ params (expensive)
+        # brute_grid_sizes: [80, 20]  # only needed when optimize_method: brute
+        optimize_params:
+          - name: R_cluster_mm
+            label: Cluster radius R [mm]
+            bounds: [0.0, 200.0]
+            plot_grid_points: 80
+          - name: E_threshold_GeV
+            label: Energy threshold [GeV]
+            bounds: [0.0, 1.0]
+            plot_grid_points: 20
+      score:
+        name: snr_energy
+        params:
+          sigma0: 1.0
+      max_events: null

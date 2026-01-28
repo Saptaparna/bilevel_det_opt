@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bilevel_opt"
+version = "0.1.0"
+description = "Bilevel optimization of detector geometry and reconstruction algorithm parameters"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "pyyaml",
+]
+
+[tool.setuptools.packages.find]
+include = ["bilevel_opt*"]
+
+[project.scripts]
+bilevel_opt = "bilevel_opt.pipeline:main"

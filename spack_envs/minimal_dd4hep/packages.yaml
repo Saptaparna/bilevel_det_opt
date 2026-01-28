@@ -1,4 +1,0 @@
-packages:
-  glibc:
-    buildable: True
-    externals: []
